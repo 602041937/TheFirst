@@ -7,14 +7,14 @@ import android.widget.ScrollView;
 
 public class MyScrollView extends ScrollView {
 
-    private boolean isIntercept = false;
+    private boolean mScrollable = true;
 
     public boolean isIntercept() {
-        return isIntercept;
+        return mScrollable;
     }
 
     public void setIntercept(boolean intercept) {
-        isIntercept = intercept;
+        mScrollable = intercept;
     }
 
     public MyScrollView(Context context) {
@@ -29,8 +29,10 @@ public class MyScrollView extends ScrollView {
         super(context, attrs, defStyleAttr);
     }
 
-    @Override
-    public boolean onInterceptTouchEvent(MotionEvent ev) {
-        return isIntercept;
-    }
+//    @Override
+//    public boolean onInterceptTouchEvent(MotionEvent ev) {
+//
+//        return false;
+//    }
+
 }
