@@ -2,20 +2,21 @@ package com.hpd.node;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Rect;
-import android.graphics.drawable.BitmapDrawable;
 import android.support.annotation.Nullable;
+import android.support.v7.app.AlertDialog;
 import android.text.Layout;
 import android.text.Spannable;
 import android.text.Spanned;
 import android.text.TextUtils;
 import android.text.style.BackgroundColorSpan;
-import android.text.style.UnderlineSpan;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.Gravity;
@@ -23,15 +24,15 @@ import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.PopupWindow;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import java.sql.Array;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 
 
 /**
@@ -41,6 +42,7 @@ import java.util.ArrayList;
 public class HPDSelectableTextView extends TextView {
 
     private static final int DEFAULT_SELECT_LENGTH = 1;
+    public int OPERATE_WINDOW_DRAW_LINE = 0, OPERATE_WINDOW_COMMENT = 1, OPERATE_WINDOW_WORD = 2;
     private SelectionInfo mSelectionInfo = null;
     private int mTouchX;
     private int mTouchY;
@@ -50,6 +52,8 @@ public class HPDSelectableTextView extends TextView {
     private BackgroundColorSpan mBackgroundColorSpan;
     private Paint paint;
     private ArrayList<SelectionInfo> lines = new ArrayList<>();
+
+    private ArrayList<SelectionInfo> comments = new ArrayList<>();
 
     private OperateWindow mOperateWindow;
     private ScrollView mScrollView;
@@ -61,7 +65,6 @@ public class HPDSelectableTextView extends TextView {
     public void setScrollView(ScrollView mScrollView) {
 
         this.mScrollView = mScrollView;
-
         this.mScrollView.setOnTouchListener(new OnTouchListener() {
             @Override
             public boolean onTouch(View v, MotionEvent event) {
@@ -82,7 +85,7 @@ public class HPDSelectableTextView extends TextView {
                             @Override
                             public void run() {
                                 if (mOperateWindow != null) {
-                                    mOperateWindow.show();
+                                    mOperateWindow.show(OPERATE_WINDOW_DRAW_LINE, OPERATE_WINDOW_COMMENT);
                                 }
                             }
                         }, 300);
@@ -110,7 +113,7 @@ public class HPDSelectableTextView extends TextView {
 
     boolean isStartCursor;
     boolean isBegin;
-
+    private int COMMENT_CLICK_ADD_OFFSET = 10;
 
     private void init() {
 
@@ -190,7 +193,7 @@ public class HPDSelectableTextView extends TextView {
                         Log.i("onTouch", "HPDSelectableTextView: ACTION_UP");
                         isBegin = false;
                         if (mOperateWindow != null) {
-                            mOperateWindow.show();
+                            mOperateWindow.show(OPERATE_WINDOW_DRAW_LINE, OPERATE_WINDOW_COMMENT);
                         }
                         break;
                 }
@@ -220,6 +223,16 @@ public class HPDSelectableTextView extends TextView {
                     clearSelectState();
                     mOperateWindow.dismiss();
                 } else {
+
+                    for (SelectionInfo info : comments) {
+                        if (mTouchX >= info.getEndX() - COMMENT_CLICK_ADD_OFFSET && mTouchX <= info.getEndX() + getCommentBitmap().getWidth() + COMMENT_CLICK_ADD_OFFSET) {
+                            if (mTouchY >= info.getEndLineBound().bottom - COMMENT_CLICK_ADD_OFFSET && mTouchY <= info.getEndLineBound().bottom + getCommentBitmap().getHeight() + COMMENT_CLICK_ADD_OFFSET) {
+                                Toast.makeText(getContext(), "点击comment," + info.getComment(), Toast.LENGTH_SHORT).show();
+                                return;
+                            }
+                        }
+                    }
+
                     for (SelectionInfo info : lines) {
                         int preciseOffset = TextLayoutUtil.getPreciseOffset(mTextView, mTouchX, mTouchY);
                         if (preciseOffset >= info.getStart() && preciseOffset <= info.getEnd()) {
@@ -254,7 +267,7 @@ public class HPDSelectableTextView extends TextView {
         if (isLeft) {
             mSelectionInfo.setStart(position);
             mSelectionInfo.setStartLine(getLayout().getLineForOffset(position));
-            float starX = getLayout().getPrimaryHorizontal(mSelectionInfo.getStart());
+            float starX = getLayout().getPrimaryHorizontal(mSelectionInfo.getStart()) + getPaddingLeft();
             mSelectionInfo.setStartX(starX);
 
             Rect startLineBound = new Rect();
@@ -263,7 +276,7 @@ public class HPDSelectableTextView extends TextView {
         } else {
             mSelectionInfo.setEnd(position);
             mSelectionInfo.setEndLine(getLayout().getLineForOffset(position));
-            float endX = getLayout().getPrimaryHorizontal(mSelectionInfo.getEnd());
+            float endX = getLayout().getPrimaryHorizontal(mSelectionInfo.getEnd()) + getPaddingLeft();
             mSelectionInfo.setEndX(endX);
 
             Rect endLineBound = new Rect();
@@ -309,10 +322,10 @@ public class HPDSelectableTextView extends TextView {
         mSelectionInfo.setStartLine(getLayout().getLineForOffset(startPosition));
         mSelectionInfo.setEndLine(getLayout().getLineForOffset(endPosition));
 
-        float starX = getLayout().getPrimaryHorizontal(mSelectionInfo.getStart());
+        float starX = getLayout().getPrimaryHorizontal(mSelectionInfo.getStart()) + getPaddingLeft();
         mSelectionInfo.setStartX(starX);
 
-        float endX = getLayout().getPrimaryHorizontal(mSelectionInfo.getEnd());
+        float endX = getLayout().getPrimaryHorizontal(mSelectionInfo.getEnd()) + getPaddingLeft();
         mSelectionInfo.setEndX(endX);
 
         Rect startLineBound = new Rect();
@@ -336,7 +349,7 @@ public class HPDSelectableTextView extends TextView {
                 mSelectionInfo.getStart(), mSelectionInfo.getEnd(),
                 Spanned.SPAN_EXCLUSIVE_INCLUSIVE);
 
-        mOperateWindow.show();
+        mOperateWindow.show(OPERATE_WINDOW_DRAW_LINE, OPERATE_WINDOW_COMMENT);
     }
 
 
@@ -347,21 +360,22 @@ public class HPDSelectableTextView extends TextView {
         super.draw(canvas);
 
         if (mSelectionInfo != null) {
+
             paint.setColor(Color.GREEN);
             int start = mSelectionInfo.getStart();
             float startX = mSelectionInfo.getStartX();
             int startLine = mSelectionInfo.getStartLine();
             Rect startLineBound = mSelectionInfo.getStartLineBound();
-            canvas.drawRect(startX - lineWidth, startLineBound.top, startX, startLineBound.bottom, paint);
-            canvas.drawCircle(startX - lineWidth / 2, startLineBound.top - circleRadius, circleRadius, paint);
+            canvas.drawRect(startX - lineWidth, startLineBound.top + getPaddingTop(), startX, startLineBound.bottom + getPaddingTop(), paint);
+            canvas.drawCircle(startX - lineWidth / 2, startLineBound.top - circleRadius + getPaddingTop(), circleRadius, paint);
 
             int end = mSelectionInfo.getEnd();
             float endX = mSelectionInfo.getEndX();
             int endLine = mSelectionInfo.getEndLine();
             Rect endLineBound = mSelectionInfo.getEndLineBound();
 
-            canvas.drawRect(endX - lineWidth, endLineBound.top, endX, endLineBound.bottom, paint);
-            canvas.drawCircle(endX - lineWidth / 2, endLineBound.bottom + circleRadius, circleRadius, paint);
+            canvas.drawRect(endX - lineWidth, endLineBound.top + getPaddingTop(), endX, endLineBound.bottom + getPaddingTop(), paint);
+            canvas.drawCircle(endX - lineWidth / 2, endLineBound.bottom + circleRadius + getPaddingTop(), circleRadius, paint);
         }
 
 
@@ -371,32 +385,49 @@ public class HPDSelectableTextView extends TextView {
         for (SelectionInfo line : lines) {
             //只在一行的情况下
             if (line.getStartLine() == line.getEndLine()) {
-                canvas.drawLine(line.getStartX(), line.getStartLineBound().bottom, line.getEndX(), line.getEndLineBound().bottom, paint);
+                canvas.drawLine(line.getStartX(), line.getStartLineBound().bottom + getPaddingTop(), line.getEndX(), line.getEndLineBound().bottom + getPaddingTop(), paint);
             } else if (line.getStartLine() != line.getEndLine()) {
                 //不在同一行的情况下
-                canvas.drawLine(line.getStartX(), line.getStartLineBound().bottom, line.getStartLineBound().right, line.getStartLineBound().bottom, paint);
+                canvas.drawLine(line.getStartX(), line.getStartLineBound().bottom + getPaddingTop(), line.getStartLineBound().right, line.getStartLineBound().bottom + getPaddingTop(), paint);
                 for (int i = line.getStartLine() + 1; i <= line.getEndLine(); i++) {
                     if (i == line.getEndLine()) {
                         //最后一行的情况
-                        canvas.drawLine(line.getEndLineBound().left, line.getEndLineBound().bottom, line.getEndX(), line.getEndLineBound().bottom, paint);
+                        canvas.drawLine(line.getEndLineBound().left + getPaddingLeft(), line.getEndLineBound().bottom + getPaddingTop(), line.getEndX(), line.getEndLineBound().bottom + getPaddingTop(), paint);
                     } else {
                         //中间行
-                        int lineBottom = getLayout().getLineBottom(i);
-                        canvas.drawLine(line.getEndLineBound().left, lineBottom, line.getEndLineBound().right, lineBottom, paint);
+                        int lineBottom = getLayout().getLineBottom(i) + getPaddingTop();
+                        canvas.drawLine(line.getEndLineBound().left + getPaddingLeft(), lineBottom, line.getEndLineBound().right, lineBottom, paint);
                     }
                 }
             }
         }
+
+        //画标注
+        for (SelectionInfo comment : comments) {
+            mSpannable.setSpan(comment.getCommentSpan(), comment.getStart(), comment.getEnd(), Spanned.SPAN_EXCLUSIVE_INCLUSIVE);
+            canvas.drawBitmap(getCommentBitmap(), comment.getEndX(), comment.getEndLineBound().bottom - 10 + getPaddingTop(), null);
+        }
     }
 
+    private Bitmap dstbmp;
+
+    private Bitmap getCommentBitmap() {
+        if (dstbmp == null) {
+            Bitmap bmp = BitmapFactory.decodeResource(getResources(), R.drawable.ic_comment);
+            Matrix matrix = new Matrix();
+            matrix.postScale(0.35f, 0.35f);
+            dstbmp = Bitmap.createBitmap(bmp, 0, 0, bmp.getWidth(), bmp.getHeight(), matrix, true);
+        }
+        return dstbmp;
+    }
 
     /*
      * Operate windows : copy, select all
      */
-    private class OperateWindow {
+    public class OperateWindow {
 
         private PopupWindow mWindow;
-        private TextView tvDrawLine;
+        private TextView tvDrawLine, tvComment, tvWord;
         private View point;
         private int mWidth;
         private int mHeight;
@@ -404,18 +435,23 @@ public class HPDSelectableTextView extends TextView {
         private OperateWindow() {
             // 解析弹出的菜单
             final View contentView = LayoutInflater.from(getContext()).inflate(R.layout.option_view, null);
+
+            //划线
             tvDrawLine = contentView.findViewById(R.id.draw_line);
             tvDrawLine.setOnClickListener(new OnClickListener() {
                 @Override
                 public void onClick(View v) {
+
                     if (mSelectionInfo == null) {
                         return;
                     }
                     if (TextUtils.isEmpty(mSelectionInfo.getSelectionContent())) {
                         return;
                     }
+
                     boolean isCanTogether = true;
                     lines.add(mSelectionInfo);
+
                     B:
                     while (isCanTogether) {
                         for (int i = 0; i < lines.size() - 1; i++) {
@@ -456,10 +492,99 @@ public class HPDSelectableTextView extends TextView {
                     invalidate();
                 }
             });
-            contentView.measure(View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
-                    View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
-            mWidth = contentView.getMeasuredWidth();
-            mHeight = contentView.getMeasuredHeight();
+
+            //批注
+            tvComment = contentView.findViewById(R.id.comment);
+            tvComment.setOnClickListener(new OnClickListener() {
+                @Override
+                public void onClick(View v) {
+
+                    if (mSelectionInfo == null) {
+                        return;
+                    }
+                    if (TextUtils.isEmpty(mSelectionInfo.getSelectionContent())) {
+                        return;
+                    }
+
+                    final ArrayList<SelectionInfo> objects = new ArrayList<>();
+                    final StringBuilder stringBuilder = new StringBuilder();
+                    for (SelectionInfo info : comments) {
+                        if (!(mSelectionInfo.getEnd() < info.getStart() || mSelectionInfo.getStart() > info.getEnd())) {
+                            objects.add(info);
+                            stringBuilder.append(info.getComment() + " sss ");
+                        }
+                    }
+                    Log.i("fadfadsfa", "stringBuilder: " + stringBuilder.toString());
+
+                    //暂时使用
+                    AlertDialog.Builder builder = new AlertDialog.Builder(getContext());
+                    builder.setTitle("合并");
+                    builder.setMessage("" + stringBuilder.toString());
+                    //点击对话框以外的区域是否让对话框消失
+                    builder.setCancelable(false);
+                    //设置正面按钮
+                    builder.setPositiveButton("是的", new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface dialog, int which) {
+
+                            //处理合并comment
+                            //逻辑
+                            objects.add(mSelectionInfo);
+                            SelectionInfo mixStartInfo = mSelectionInfo;
+                            SelectionInfo maxEndInfo = mSelectionInfo;
+                            for (SelectionInfo info : objects) {
+                                if (info.getStart() < mixStartInfo.getStart()) {
+                                    mixStartInfo = info;
+                                }
+                                if (info.getEnd() > maxEndInfo.getEnd()) {
+                                    maxEndInfo = info;
+                                }
+                            }
+
+                            mSelectionInfo.setStart(mixStartInfo.getStart());
+                            mSelectionInfo.setStartX(mixStartInfo.getStartX());
+                            mSelectionInfo.setStartLine(mixStartInfo.getStartLine());
+                            mSelectionInfo.setStartLineBound(mixStartInfo.getStartLineBound());
+                            mSelectionInfo.setEnd(maxEndInfo.getEnd());
+                            mSelectionInfo.setEndX(maxEndInfo.getEndX());
+                            mSelectionInfo.setEndLine(maxEndInfo.getEndLine());
+                            mSelectionInfo.setEndLineBound(maxEndInfo.getEndLineBound());
+
+                            mSelectionInfo.setComment(stringBuilder.toString() + mSelectionInfo.getStart());
+
+                            comments.removeAll(objects);
+
+                            comments.add(mSelectionInfo);
+                            Collections.sort(comments, new Comparator<SelectionInfo>() {
+                                @Override
+                                public int compare(SelectionInfo o1, SelectionInfo o2) {
+                                    return o1.getStart() - o2.getStart();
+                                }
+                            });
+                            clearSelectState();
+                            dialog.dismiss();
+                            dismiss();
+                            invalidate();
+                        }
+                    });
+
+
+                    //设置反面按钮
+                    builder.setNegativeButton("不是", new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface dialog, int which) {
+
+                            dialog.dismiss();
+                        }
+                    });
+                    AlertDialog dialog = builder.create();
+                    //显示对话框
+                    dialog.show();
+                }
+            });
+
+            tvWord = contentView.findViewById(R.id.word);
+
             // 通过PopWindow弹出
             mWindow = new PopupWindow(contentView,
                     ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -471,7 +596,7 @@ public class HPDSelectableTextView extends TextView {
         /**
          * 显示弹窗的方法
          */
-        private void show() {
+        private void show(int... operates) {
 
             if (mSelectionInfo == null) {
                 return;
@@ -480,16 +605,36 @@ public class HPDSelectableTextView extends TextView {
                 return;
             }
 
+            tvDrawLine.setVisibility(GONE);
+            tvComment.setVisibility(GONE);
+            tvWord.setVisibility(GONE);
+
+            for (int item : operates) {
+                if (item == OPERATE_WINDOW_DRAW_LINE) {
+                    tvDrawLine.setVisibility(VISIBLE);
+                } else if (item == OPERATE_WINDOW_COMMENT) {
+                    tvComment.setVisibility(VISIBLE);
+                } else if (item == OPERATE_WINDOW_WORD) {
+                    tvWord.setVisibility(VISIBLE);
+                }
+            }
+
+            View contentView = mWindow.getContentView();
+            contentView.measure(MeasureSpec.UNSPECIFIED, MeasureSpec.UNSPECIFIED);
+
+            mWidth = contentView.getMeasuredWidth();
+            mHeight = contentView.getMeasuredHeight();
+
             // 获取在当前窗口内的绝对坐标
             mTextView.getLocationInWindow(mLocation);
             // 定位弹窗位置
             Layout layout = mTextView.getLayout();
             // 得到当前字符段的左边X坐标+Y坐标
-            float posX = layout.getPrimaryHorizontal(mSelectionInfo.getStart()) + mLocation[0] + mTextView.getPaddingLeft();
-            float posRightX = layout.getPrimaryHorizontal(mSelectionInfo.getEnd()) + mLocation[0] + mTextView.getPaddingLeft();
+            float posX = mSelectionInfo.getStartX() + mLocation[0];
+            float posRightX = mSelectionInfo.getEndX() + mLocation[0];
+
             posX = posX + (posRightX - posX) / 2 - mWidth / 2;
-            int posY = layout.getLineTop(layout.getLineForOffset(
-                    mSelectionInfo.getStart())) + mLocation[1] + mTextView.getPaddingTop() - mHeight - 5;
+            int posY = mSelectionInfo.getStartLineBound().top + getPaddingTop() + mLocation[1] - mHeight - 5;
 
             LinearLayout.LayoutParams layoutParams = (LinearLayout.LayoutParams) point.getLayoutParams();
             layoutParams.setMargins(0, 0, 0, 0);
@@ -528,6 +673,4 @@ public class HPDSelectableTextView extends TextView {
             tvDrawLine.setEnabled(del);
         }
     }
-
-
 }
