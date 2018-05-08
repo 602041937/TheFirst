@@ -223,7 +223,10 @@ public class HPDSelectableTextView extends TextView {
                     for (SelectionInfo info : lines) {
                         int preciseOffset = TextLayoutUtil.getPreciseOffset(mTextView, mTouchX, mTouchY);
                         if (preciseOffset >= info.getStart() && preciseOffset <= info.getEnd()) {
+                            lines.remove(info);
                             Toast.makeText(getContext(), "删除划线", Toast.LENGTH_SHORT).show();
+                            invalidate();
+                            break;
                         }
                     }
                 }
@@ -383,10 +386,6 @@ public class HPDSelectableTextView extends TextView {
                     }
                 }
             }
-
-            for (int i = line.getStartLine(); i <= line.getEndLine(); i++) {
-
-            }
         }
     }
 
@@ -415,16 +414,46 @@ public class HPDSelectableTextView extends TextView {
                     if (TextUtils.isEmpty(mSelectionInfo.getSelectionContent())) {
                         return;
                     }
-//                    Log.i("onClick", "onClick: " + mSelectionInfo.getSelectionContent());
-//                    DrawLine drawLine = new DrawLine();
-//                    drawLine.setStart(mSelectionInfo.getStart());
-//                    drawLine.setEnd(mSelectionInfo.getEnd());
+                    boolean isCanTogether = true;
                     lines.add(mSelectionInfo);
+                    B:
+                    while (isCanTogether) {
+                        for (int i = 0; i < lines.size() - 1; i++) {
+                            SelectionInfo infoI = lines.get(i);
+                            for (int j = i + 1; j < lines.size(); j++) {
+                                SelectionInfo infoJ = lines.get(j);
+                                if (infoI.getStart() < infoJ.getStart() && infoI.getEnd() >= infoJ.getStart()) {
+                                    infoJ.setStart(infoI.getStart());
+                                    infoJ.setStartX(infoI.getStartX());
+                                    infoJ.setStartLine(infoI.getStartLine());
+                                    infoJ.setStartLineBound(infoI.getStartLineBound());
+                                    if (infoI.getEnd() > infoJ.getEnd()) {
+                                        infoJ.setEnd(infoI.getEnd());
+                                        infoJ.setEndLine(infoI.getEndLine());
+                                        infoJ.setEndLineBound(infoI.getEndLineBound());
+                                        infoJ.setEndX(infoI.getEndX());
+                                    }
+                                    lines.remove(infoI);
+                                    continue B;
+                                } else if (infoI.getStart() >= infoJ.getStart() && infoI.getStart() <= infoJ.getEnd()) {
+                                    isCanTogether = true;
+                                    if (infoI.getEnd() > infoJ.getEnd()) {
+                                        infoJ.setEnd(infoI.getEnd());
+                                        infoJ.setEndLine(infoI.getEndLine());
+                                        infoJ.setEndLineBound(infoI.getEndLineBound());
+                                        infoJ.setEndX(infoI.getEndX());
+                                    }
+                                    lines.remove(infoI);
+                                    continue B;
+                                }
+                            }
+                        }
+                        isCanTogether = false;
+                    }
                     mSelectionInfo = null;
                     clearSelectState();
                     dismiss();
                     invalidate();
-//                    updateLineSpan();
                 }
             });
             contentView.measure(View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
