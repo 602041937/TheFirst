@@ -30,6 +30,7 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -56,44 +57,69 @@ public class HPDSelectableTextView extends TextView {
     private ArrayList<SelectionInfo> comments = new ArrayList<>();
 
     private OperateWindow mOperateWindow;
-    private ScrollView mScrollView;
+    private ObservableScrollView mScrollView;
 
     public ScrollView getScrollView() {
         return mScrollView;
     }
 
-    public void setScrollView(ScrollView mScrollView) {
+    public void setScrollView(ObservableScrollView mScrollView) {
 
         this.mScrollView = mScrollView;
-        this.mScrollView.setOnTouchListener(new OnTouchListener() {
+        this.mScrollView.setOnScrollListener(new ObservableScrollView.OnScrollListener() {
             @Override
-            public boolean onTouch(View v, MotionEvent event) {
-                switch (event.getAction()) {
-                    case MotionEvent.ACTION_DOWN:
-                        Log.i("mScrollView", "ACTION_DOWN: ");
+            public void onScrollStateChanged(ObservableScrollView view, int scrollState) {
+                switch (scrollState) {
+                    case SCROLL_STATE_IDLE:
+                        Log.d("MainActivity", "idle");
+                        if (mOperateWindow != null) {
+                            mOperateWindow.show(OPERATE_WINDOW_DRAW_LINE, OPERATE_WINDOW_COMMENT);
+                        }
                         break;
-                    case MotionEvent.ACTION_MOVE:
-                        Log.i("mScrollView", "ACTION_MOVE: ");
+                    case SCROLL_STATE_TOUCH_SCROLL:
+                        Log.d("MainActivity", "touch scroll");
                         if (mOperateWindow != null && mOperateWindow.isShowing()) {
                             mOperateWindow.dismiss();
                         }
                         break;
-                    case MotionEvent.ACTION_UP:
-                    case MotionEvent.ACTION_CANCEL:
-                        //加上postDelayed，因为猛滚动，然后放下，scrollview会再滑动一段距离，导致pop出现偏差
-                        postDelayed(new Runnable() {
-                            @Override
-                            public void run() {
-                                if (mOperateWindow != null) {
-                                    mOperateWindow.show(OPERATE_WINDOW_DRAW_LINE, OPERATE_WINDOW_COMMENT);
-                                }
-                            }
-                        }, 300);
+                    case SCROLL_STATE_FLING:
+                        Log.d("MainActivity", "fling");
                         break;
                 }
-                return false;
+            }
+
+            @Override
+            public void onScroll(ObservableScrollView view, boolean isTouchScroll, int l, int t, int oldl, int oldt) {
+
             }
         });
+
+//
+//        this.mScrollView.setOnTouchListener(new OnTouchListener() {
+//            @Override
+//            public boolean onTouch(View v, MotionEvent event) {
+//                switch (event.getAction()) {
+//                    case MotionEvent.ACTION_DOWN:
+//                        Log.i("mScrollView", "ACTION_DOWN: ");
+//                        break;
+//                    case MotionEvent.ACTION_MOVE:
+//                        Log.i("mScrollView", "ACTION_MOVE: ");
+//
+//                        break;
+//                    case MotionEvent.ACTION_UP:
+//                    case MotionEvent.ACTION_CANCEL:
+//                        //加上postDelayed，因为猛滚动，然后放下，scrollview会再滑动一段距离，导致pop出现偏差
+//                        postDelayed(new Runnable() {
+//                            @Override
+//                            public void run() {
+//
+//                            }
+//                        }, 500);
+//                        break;
+//                }
+//                return false;
+//            }
+//        });
     }
 
     private int circleRadius = 10;
@@ -132,8 +158,8 @@ public class HPDSelectableTextView extends TextView {
             public boolean onTouch(View view, MotionEvent motionEvent) {
 
                 Log.i("ssssss", "HPDSelectableTextView: ");
-                mTouchX = (int) motionEvent.getX();
-                mTouchY = (int) motionEvent.getY();
+                mTouchX = (int) motionEvent.getX() - getPaddingLeft();
+                mTouchY = (int) motionEvent.getY() - getPaddingTop();
                 Log.i("onTouch", "mTouchX: " + mTouchX);
                 Log.i("onTouch", "mTouchY: " + mTouchY);
 
@@ -267,7 +293,7 @@ public class HPDSelectableTextView extends TextView {
         if (isLeft) {
             mSelectionInfo.setStart(position);
             mSelectionInfo.setStartLine(getLayout().getLineForOffset(position));
-            float starX = getLayout().getPrimaryHorizontal(mSelectionInfo.getStart()) + getPaddingLeft();
+            float starX = getLayout().getPrimaryHorizontal(mSelectionInfo.getStart());
             mSelectionInfo.setStartX(starX);
 
             Rect startLineBound = new Rect();
@@ -276,7 +302,7 @@ public class HPDSelectableTextView extends TextView {
         } else {
             mSelectionInfo.setEnd(position);
             mSelectionInfo.setEndLine(getLayout().getLineForOffset(position));
-            float endX = getLayout().getPrimaryHorizontal(mSelectionInfo.getEnd()) + getPaddingLeft();
+            float endX = getLayout().getPrimaryHorizontal(mSelectionInfo.getEnd());
             mSelectionInfo.setEndX(endX);
 
             Rect endLineBound = new Rect();
@@ -308,6 +334,7 @@ public class HPDSelectableTextView extends TextView {
     private void updateSelectionInfo() {
 
         int startPosition = TextLayoutUtil.getPreciseOffset(mTextView, mTouchX, mTouchY);
+        Log.i("dfsafsadfas", "startPosition: =" + startPosition);
         //异常处理
         if (startPosition >= getText().toString().length()) {
             return;
@@ -322,10 +349,11 @@ public class HPDSelectableTextView extends TextView {
         mSelectionInfo.setStartLine(getLayout().getLineForOffset(startPosition));
         mSelectionInfo.setEndLine(getLayout().getLineForOffset(endPosition));
 
-        float starX = getLayout().getPrimaryHorizontal(mSelectionInfo.getStart()) + getPaddingLeft();
+        float starX = getLayout().getPrimaryHorizontal(mSelectionInfo.getStart());
+        Log.i("fasfdasf", "updateSelectionInfo: starX" + starX);
         mSelectionInfo.setStartX(starX);
 
-        float endX = getLayout().getPrimaryHorizontal(mSelectionInfo.getEnd()) + getPaddingLeft();
+        float endX = getLayout().getPrimaryHorizontal(mSelectionInfo.getEnd());
         mSelectionInfo.setEndX(endX);
 
         Rect startLineBound = new Rect();
@@ -363,14 +391,14 @@ public class HPDSelectableTextView extends TextView {
 
             paint.setColor(Color.GREEN);
             int start = mSelectionInfo.getStart();
-            float startX = mSelectionInfo.getStartX();
+            float startX = mSelectionInfo.getStartX() + getPaddingLeft();
             int startLine = mSelectionInfo.getStartLine();
             Rect startLineBound = mSelectionInfo.getStartLineBound();
             canvas.drawRect(startX - lineWidth, startLineBound.top + getPaddingTop(), startX, startLineBound.bottom + getPaddingTop(), paint);
             canvas.drawCircle(startX - lineWidth / 2, startLineBound.top - circleRadius + getPaddingTop(), circleRadius, paint);
 
             int end = mSelectionInfo.getEnd();
-            float endX = mSelectionInfo.getEndX();
+            float endX = mSelectionInfo.getEndX() + getPaddingLeft();
             int endLine = mSelectionInfo.getEndLine();
             Rect endLineBound = mSelectionInfo.getEndLineBound();
 
@@ -385,18 +413,18 @@ public class HPDSelectableTextView extends TextView {
         for (SelectionInfo line : lines) {
             //只在一行的情况下
             if (line.getStartLine() == line.getEndLine()) {
-                canvas.drawLine(line.getStartX(), line.getStartLineBound().bottom + getPaddingTop(), line.getEndX(), line.getEndLineBound().bottom + getPaddingTop(), paint);
+                canvas.drawLine(line.getStartX() + getPaddingLeft(), line.getStartLineBound().bottom + getPaddingTop(), line.getEndX() + getPaddingLeft(), line.getEndLineBound().bottom + getPaddingTop(), paint);
             } else if (line.getStartLine() != line.getEndLine()) {
                 //不在同一行的情况下
-                canvas.drawLine(line.getStartX(), line.getStartLineBound().bottom + getPaddingTop(), line.getStartLineBound().right, line.getStartLineBound().bottom + getPaddingTop(), paint);
+                canvas.drawLine(line.getStartX() + getPaddingLeft(), line.getStartLineBound().bottom + getPaddingTop(), line.getStartLineBound().right + getPaddingLeft(), line.getStartLineBound().bottom + getPaddingTop(), paint);
                 for (int i = line.getStartLine() + 1; i <= line.getEndLine(); i++) {
                     if (i == line.getEndLine()) {
                         //最后一行的情况
-                        canvas.drawLine(line.getEndLineBound().left + getPaddingLeft(), line.getEndLineBound().bottom + getPaddingTop(), line.getEndX(), line.getEndLineBound().bottom + getPaddingTop(), paint);
+                        canvas.drawLine(line.getEndLineBound().left + getPaddingLeft(), line.getEndLineBound().bottom + getPaddingTop(), line.getEndX() + getPaddingLeft(), line.getEndLineBound().bottom + getPaddingTop(), paint);
                     } else {
                         //中间行
                         int lineBottom = getLayout().getLineBottom(i) + getPaddingTop();
-                        canvas.drawLine(line.getEndLineBound().left + getPaddingLeft(), lineBottom, line.getEndLineBound().right, lineBottom, paint);
+                        canvas.drawLine(line.getEndLineBound().left + getPaddingLeft(), lineBottom, line.getEndLineBound().right + getPaddingLeft(), lineBottom, paint);
                     }
                 }
             }
@@ -405,7 +433,7 @@ public class HPDSelectableTextView extends TextView {
         //画标注
         for (SelectionInfo comment : comments) {
             mSpannable.setSpan(comment.getCommentSpan(), comment.getStart(), comment.getEnd(), Spanned.SPAN_EXCLUSIVE_INCLUSIVE);
-            canvas.drawBitmap(getCommentBitmap(), comment.getEndX(), comment.getEndLineBound().bottom - 10 + getPaddingTop(), null);
+            canvas.drawBitmap(getCommentBitmap(), comment.getEndX() + getPaddingLeft(), comment.getEndLineBound().bottom - 10 + getPaddingTop(), null);
         }
     }
 
@@ -627,33 +655,53 @@ public class HPDSelectableTextView extends TextView {
 
             // 获取在当前窗口内的绝对坐标
             mTextView.getLocationInWindow(mLocation);
-            // 定位弹窗位置
-            Layout layout = mTextView.getLayout();
+
+            float resultX = 0;
+            float resultY = 0;
+
             // 得到当前字符段的左边X坐标+Y坐标
-            float posX = mSelectionInfo.getStartX() + mLocation[0];
-            float posRightX = mSelectionInfo.getEndX() + mLocation[0];
+            float startX = mSelectionInfo.getStartX() + mLocation[0] + getPaddingLeft();
+            float endX = mSelectionInfo.getEndX() + mLocation[0] + getPaddingLeft();
 
-            posX = posX + (posRightX - posX) / 2 - mWidth / 2;
-            int posY = mSelectionInfo.getStartLineBound().top + getPaddingTop() + mLocation[1] - mHeight - 5;
+            resultX = startX + (endX - startX) / 2 - mWidth / 2;
 
+            //重置箭头的位置
             LinearLayout.LayoutParams layoutParams = (LinearLayout.LayoutParams) point.getLayoutParams();
             layoutParams.setMargins(0, 0, 0, 0);
             point.setLayoutParams(layoutParams);
-            if (posX < 0) {
+
+            //如果pop显示小于临界值，调整到临界值，并且把箭头对准所选区域的中间
+            if (resultX < 0) {
                 LinearLayout.LayoutParams layoutParams2 = (LinearLayout.LayoutParams) point.getLayoutParams();
-                layoutParams2.setMargins((int) posX, 0, 0, 0);
+                layoutParams2.setMargins((int) resultX, 0, 0, 0);
                 point.setLayoutParams(layoutParams2);
-                posX = 0;
+                resultX = 0;
             }
 
-            if ((posX + mWidth) > TextLayoutUtil.getScreenWidth(getContext())) {
+            //如果pop显示大于临界值，调整到临界值，并且把箭头对准所选区域的中间
+            if ((resultX + mWidth) > TextLayoutUtil.getScreenWidth(getContext())) {
                 LinearLayout.LayoutParams layoutParams2 = (LinearLayout.LayoutParams) point.getLayoutParams();
-                layoutParams2.setMargins((int) (posX + mWidth) - TextLayoutUtil.getScreenWidth(getContext()), 0, 0, 0);
+                layoutParams2.setMargins((int) (resultX + mWidth) - TextLayoutUtil.getScreenWidth(getContext()), 0, 0, 0);
                 point.setLayoutParams(layoutParams2);
-                posX = TextLayoutUtil.getScreenWidth(getContext()) - mWidth;
+                resultX = TextLayoutUtil.getScreenWidth(getContext()) - mWidth;
             }
 
-            mWindow.showAtLocation(mTextView, Gravity.NO_GRAVITY, (int) posX, posY);
+            //取得开始位置的y
+            resultY = mSelectionInfo.getStartLineBound().top + getPaddingTop() + mLocation[1] - mHeight - 5;
+            if (resultY <= 300) {
+                //需要显示在所选区域下边
+                resultY = mSelectionInfo.getEndLineBound().bottom + getPaddingTop() + mLocation[1];
+                //如果下边的显示区域超过临界值，那就不要显示了。
+                if (resultY < 350) {
+                    return;
+                }
+                //最后的就是选择区域充满全屏幕，就显示在中间
+                if (resultY > getContext().getResources().getDisplayMetrics().heightPixels - mHeight) {
+                    resultX = getContext().getResources().getDisplayMetrics().widthPixels / 2 - mWidth / 2;
+                    resultY = getContext().getResources().getDisplayMetrics().heightPixels / 2 - mHeight / 2;
+                }
+            }
+            mWindow.showAtLocation(mTextView, Gravity.NO_GRAVITY, (int) resultX, (int) resultY);
         }
 
         private void dismiss() {
