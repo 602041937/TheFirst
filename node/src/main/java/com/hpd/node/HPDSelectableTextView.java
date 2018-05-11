@@ -1,6 +1,7 @@
 package com.hpd.node;
 
 import android.annotation.SuppressLint;
+import android.app.Activity;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.graphics.Bitmap;
@@ -10,6 +11,7 @@ import android.graphics.Color;
 import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Rect;
+import android.graphics.drawable.BitmapDrawable;
 import android.support.annotation.Nullable;
 import android.support.v7.app.AlertDialog;
 import android.text.Spannable;
@@ -23,6 +25,7 @@ import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.PopupWindow;
 import android.widget.ScrollView;
@@ -35,6 +38,7 @@ import java.util.Comparator;
 
 /**
  * getSecondaryHorizontal()不知道为什么不起作用，数值跟getPrimaryHorizontal()一样
+ * scrollview 必须传入
  */
 @SuppressLint("AppCompatCustomView")
 public class HPDSelectableTextView extends TextView {
@@ -60,11 +64,16 @@ public class HPDSelectableTextView extends TextView {
     private ArrayList<SelectionInfo> comments = new ArrayList<>();
 
     private OperateWindow mOperateWindow;
+    private MagnifyPop mMagnifyPop;
     private ObservableScrollView mScrollView;
+    private View decorView;
 
     public ScrollView getScrollView() {
         return mScrollView;
     }
+
+    private boolean isCanMagnify = true;
+
 
     public void setScrollView(ObservableScrollView mScrollView) {
 
@@ -116,6 +125,8 @@ public class HPDSelectableTextView extends TextView {
     private void init() {
 
         mTextView = this;
+        Activity activity = (Activity) getContext();
+        decorView = activity.getWindow().getDecorView();
         mTextView.setText(mTextView.getText(), TextView.BufferType.SPANNABLE);
         mSpannable = (Spannable) getText();
         mBackgroundColorSpan = new BackgroundColorSpan(Color.RED);
@@ -124,6 +135,7 @@ public class HPDSelectableTextView extends TextView {
         paint.setColor(Color.GREEN);
 
         mOperateWindow = new OperateWindow();
+        mMagnifyPop = new MagnifyPop();
 
         setOnTouchListener(new OnTouchListener() {
 
@@ -179,6 +191,7 @@ public class HPDSelectableTextView extends TextView {
                         if (mSelectionInfo != null && isBegin) {
                             getParent().requestDisallowInterceptTouchEvent(true);
                             dealMoveStarCursor(isStartCursor);
+                            dealMoveMagnifyPop(isStartCursor);
                         }
                         if (mOperateWindow != null && mOperateWindow.isShowing()) {
                             mOperateWindow.dismiss();
@@ -193,6 +206,7 @@ public class HPDSelectableTextView extends TextView {
                         if (mOperateWindow != null) {
                             mOperateWindow.show(OPERATE_WINDOW_DRAW_LINE, OPERATE_WINDOW_COMMENT);
                         }
+                        mMagnifyPop.dismiss();
                         break;
                 }
                 return false;
@@ -252,6 +266,8 @@ public class HPDSelectableTextView extends TextView {
         invalidate();
     }
 
+    Bitmap bitmap;
+
     private void dealMoveStarCursor(boolean isLeft) {
 
         int position = TextLayoutUtil.getPreciseOffset(mTextView, mTouchX, mTouchY);
@@ -269,6 +285,7 @@ public class HPDSelectableTextView extends TextView {
             Rect startLineBound = new Rect();
             getLayout().getLineBounds(mSelectionInfo.getStartLine(), startLineBound);
             mSelectionInfo.setStartLineBound(startLineBound);
+
         } else {
             mSelectionInfo.setEnd(position);
             mSelectionInfo.setEndLine(getLayout().getLineForOffset(position));
@@ -285,7 +302,6 @@ public class HPDSelectableTextView extends TextView {
             isStartCursor = !isStartCursor;
         }
 
-
         mSelectionInfo.setSelectionContent(
                 mSpannable.subSequence(
                         mSelectionInfo.getStart(),
@@ -299,6 +315,55 @@ public class HPDSelectableTextView extends TextView {
                 mSelectionInfo.getStart(), mSelectionInfo.getEnd(),
                 Spanned.SPAN_EXCLUSIVE_INCLUSIVE);
         invalidate();
+    }
+
+    private void dealMoveMagnifyPop(boolean isLeft) {
+
+        if (!isCanMagnify) {
+            return;
+        }
+        decorView.destroyDrawingCache();
+        decorView.setDrawingCacheEnabled(true);
+        Bitmap bmp = decorView.getDrawingCache();
+
+        if (isLeft) {
+
+            int imageX = (int) (mSelectionInfo.getStartX() - 150 + mLocation[0] + getPaddingLeft());
+            if (imageX < 0) {
+                imageX = 0;
+            }
+            if (imageX > bmp.getWidth() - 300) {
+                imageX = bmp.getWidth() - 300;
+            }
+            int imageY = (int) (mSelectionInfo.getStartLineBound().top + mLocation[1] + getPaddingTop() + getTextSize() / 2 - 75);
+            if (imageY < 0) {
+                imageY = 0;
+            }
+            if (imageY > bmp.getHeight() - 150) {
+                imageY = bmp.getHeight() - 150;
+            }
+            bitmap = Bitmap.createBitmap(bmp, imageX, imageY, 300, 150);
+            mMagnifyPop.show();
+
+        } else {
+
+            int imageX = (int) (mSelectionInfo.getEndX() + getPaddingLeft() - 150 + mLocation[0]);
+            if (imageX < 0) {
+                imageX = 0;
+            }
+            if (imageX > bmp.getWidth() - 300) {
+                imageX = bmp.getWidth() - 300;
+            }
+            int imageY = (int) (mSelectionInfo.getEndLineBound().top + mLocation[1] + getPaddingTop() + getTextSize() / 2 - 75);
+            if (imageY < 0) {
+                imageY = 0;
+            }
+            if (imageY > bmp.getHeight() - 150) {
+                imageY = bmp.getHeight() - 150;
+            }
+            bitmap = Bitmap.createBitmap(bmp, imageX, imageY, 300, 150);
+            mMagnifyPop.show();
+        }
     }
 
     private void updateSelectionInfo() {
@@ -680,6 +745,52 @@ public class HPDSelectableTextView extends TextView {
 
         public boolean isShowing() {
             return mWindow.isShowing();
+        }
+    }
+
+
+    /**
+     * 放大镜
+     */
+    private class MagnifyPop {
+
+        private PopupWindow mWindow;
+        private ImageView imageView;
+
+        public MagnifyPop() {
+
+            @SuppressLint("InflateParams") final View contentView = LayoutInflater.from(getContext()).inflate(R.layout.mgnify_view, null, false);
+            imageView = new ImageView(getContext());
+            // 通过PopWindow弹出
+            mWindow = new PopupWindow(contentView,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT, false);
+            imageView = contentView.findViewById(R.id.image);
+        }
+
+        public void show() {
+            Log.i(" mWindow.getHeight()", "show:  mWindow.getHeight()" + mWindow.getHeight());
+            int x = mTouchX + mLocation[0] + getPaddingLeft() - 300 / 2;
+            int y = mTouchY + mLocation[1] + getPaddingTop() - 150 - 100;
+            Log.i("xxxx", "y=" + y);
+            if (y < 150) {
+                y = 250;
+            }
+
+            if (bitmap != null) {
+                imageView.setImageBitmap(bitmap);
+            }
+            if (mWindow.isShowing()) {
+                mWindow.update(x, y, mWindow.getWidth(), mWindow.getHeight());
+            } else {
+                mWindow.showAtLocation(mTextView, Gravity.NO_GRAVITY, x, y);
+            }
+        }
+
+        public void dismiss() {
+            if (mWindow.isShowing()) {
+                mWindow.dismiss();
+            }
         }
     }
 }
