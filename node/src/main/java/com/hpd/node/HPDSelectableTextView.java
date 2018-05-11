@@ -12,7 +12,6 @@ import android.graphics.Paint;
 import android.graphics.Rect;
 import android.support.annotation.Nullable;
 import android.support.v7.app.AlertDialog;
-import android.text.Layout;
 import android.text.Spannable;
 import android.text.Spanned;
 import android.text.TextUtils;
@@ -30,11 +29,9 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
-
 
 /**
  * getSecondaryHorizontal()不知道为什么不起作用，数值跟getPrimaryHorizontal()一样
@@ -42,7 +39,13 @@ import java.util.Comparator;
 @SuppressLint("AppCompatCustomView")
 public class HPDSelectableTextView extends TextView {
 
+    //默认选择文本的宽度
     private static final int DEFAULT_SELECT_LENGTH = 1;
+    //游标的竖线的宽度
+    private static final int CURSOR_LINE_WIDTH = 3;
+    //游标的圆形直径
+    private static final int CURSOR_CIRCLE_DIAMETER = 10;
+
     public int OPERATE_WINDOW_DRAW_LINE = 0, OPERATE_WINDOW_COMMENT = 1, OPERATE_WINDOW_WORD = 2;
     private SelectionInfo mSelectionInfo = null;
     private int mTouchX;
@@ -71,19 +74,16 @@ public class HPDSelectableTextView extends TextView {
             public void onScrollStateChanged(ObservableScrollView view, int scrollState) {
                 switch (scrollState) {
                     case SCROLL_STATE_IDLE:
-                        Log.d("MainActivity", "idle");
                         if (mOperateWindow != null) {
                             mOperateWindow.show(OPERATE_WINDOW_DRAW_LINE, OPERATE_WINDOW_COMMENT);
                         }
                         break;
                     case SCROLL_STATE_TOUCH_SCROLL:
-                        Log.d("MainActivity", "touch scroll");
                         if (mOperateWindow != null && mOperateWindow.isShowing()) {
                             mOperateWindow.dismiss();
                         }
                         break;
                     case SCROLL_STATE_FLING:
-                        Log.d("MainActivity", "fling");
                         break;
                 }
             }
@@ -93,36 +93,8 @@ public class HPDSelectableTextView extends TextView {
 
             }
         });
-
-//
-//        this.mScrollView.setOnTouchListener(new OnTouchListener() {
-//            @Override
-//            public boolean onTouch(View v, MotionEvent event) {
-//                switch (event.getAction()) {
-//                    case MotionEvent.ACTION_DOWN:
-//                        Log.i("mScrollView", "ACTION_DOWN: ");
-//                        break;
-//                    case MotionEvent.ACTION_MOVE:
-//                        Log.i("mScrollView", "ACTION_MOVE: ");
-//
-//                        break;
-//                    case MotionEvent.ACTION_UP:
-//                    case MotionEvent.ACTION_CANCEL:
-//                        //加上postDelayed，因为猛滚动，然后放下，scrollview会再滑动一段距离，导致pop出现偏差
-//                        postDelayed(new Runnable() {
-//                            @Override
-//                            public void run() {
-//
-//                            }
-//                        }, 500);
-//                        break;
-//                }
-//                return false;
-//            }
-//        });
     }
 
-    private int circleRadius = 10;
 
     public HPDSelectableTextView(Context context) {
         this(context, null);
@@ -154,10 +126,11 @@ public class HPDSelectableTextView extends TextView {
         mOperateWindow = new OperateWindow();
 
         setOnTouchListener(new OnTouchListener() {
+
+            @SuppressLint("ClickableViewAccessibility")
             @Override
             public boolean onTouch(View view, MotionEvent motionEvent) {
 
-                Log.i("ssssss", "HPDSelectableTextView: ");
                 mTouchX = (int) motionEvent.getX() - getPaddingLeft();
                 mTouchY = (int) motionEvent.getY() - getPaddingTop();
                 Log.i("onTouch", "mTouchX: " + mTouchX);
@@ -214,7 +187,6 @@ public class HPDSelectableTextView extends TextView {
 
                     case MotionEvent.ACTION_CANCEL:
                     case MotionEvent.ACTION_UP:
-
                         getParent().requestDisallowInterceptTouchEvent(true);
                         Log.i("onTouch", "HPDSelectableTextView: ACTION_UP");
                         isBegin = false;
@@ -233,8 +205,6 @@ public class HPDSelectableTextView extends TextView {
 
                 updateSelectionInfo();
                 getLocationInWindow(mLocation);
-                Log.i("onLongClick", "mLocation[0]: " + mLocation[0]);
-                Log.i("onLongClick", "mLocation[1]: " + mLocation[1]);
                 //true:不再触发onclick事件
                 return true;
             }
@@ -334,7 +304,7 @@ public class HPDSelectableTextView extends TextView {
     private void updateSelectionInfo() {
 
         int startPosition = TextLayoutUtil.getPreciseOffset(mTextView, mTouchX, mTouchY);
-        Log.i("dfsafsadfas", "startPosition: =" + startPosition);
+
         //异常处理
         if (startPosition >= getText().toString().length()) {
             return;
@@ -350,7 +320,6 @@ public class HPDSelectableTextView extends TextView {
         mSelectionInfo.setEndLine(getLayout().getLineForOffset(endPosition));
 
         float starX = getLayout().getPrimaryHorizontal(mSelectionInfo.getStart());
-        Log.i("fasfdasf", "updateSelectionInfo: starX" + starX);
         mSelectionInfo.setStartX(starX);
 
         float endX = getLayout().getPrimaryHorizontal(mSelectionInfo.getEnd());
@@ -381,8 +350,6 @@ public class HPDSelectableTextView extends TextView {
     }
 
 
-    private int lineWidth = 3;
-
     @Override
     public void draw(Canvas canvas) {
         super.draw(canvas);
@@ -390,20 +357,16 @@ public class HPDSelectableTextView extends TextView {
         if (mSelectionInfo != null) {
 
             paint.setColor(Color.GREEN);
-            int start = mSelectionInfo.getStart();
             float startX = mSelectionInfo.getStartX() + getPaddingLeft();
-            int startLine = mSelectionInfo.getStartLine();
             Rect startLineBound = mSelectionInfo.getStartLineBound();
-            canvas.drawRect(startX - lineWidth, startLineBound.top + getPaddingTop(), startX, startLineBound.bottom + getPaddingTop(), paint);
-            canvas.drawCircle(startX - lineWidth / 2, startLineBound.top - circleRadius + getPaddingTop(), circleRadius, paint);
+            canvas.drawRect(startX - CURSOR_LINE_WIDTH, startLineBound.top + getPaddingTop(), startX, startLineBound.bottom + getPaddingTop(), paint);
+            canvas.drawCircle(startX - CURSOR_LINE_WIDTH / 2, startLineBound.top - CURSOR_CIRCLE_DIAMETER + getPaddingTop(), CURSOR_CIRCLE_DIAMETER, paint);
 
-            int end = mSelectionInfo.getEnd();
             float endX = mSelectionInfo.getEndX() + getPaddingLeft();
-            int endLine = mSelectionInfo.getEndLine();
             Rect endLineBound = mSelectionInfo.getEndLineBound();
 
-            canvas.drawRect(endX - lineWidth, endLineBound.top + getPaddingTop(), endX, endLineBound.bottom + getPaddingTop(), paint);
-            canvas.drawCircle(endX - lineWidth / 2, endLineBound.bottom + circleRadius + getPaddingTop(), circleRadius, paint);
+            canvas.drawRect(endX - CURSOR_LINE_WIDTH, endLineBound.top + getPaddingTop(), endX, endLineBound.bottom + getPaddingTop(), paint);
+            canvas.drawCircle(endX - CURSOR_LINE_WIDTH / 2, endLineBound.bottom + CURSOR_CIRCLE_DIAMETER + getPaddingTop(), CURSOR_CIRCLE_DIAMETER, paint);
         }
 
 
@@ -452,7 +415,7 @@ public class HPDSelectableTextView extends TextView {
     /*
      * Operate windows : copy, select all
      */
-    public class OperateWindow {
+    private class OperateWindow {
 
         private PopupWindow mWindow;
         private TextView tvDrawLine, tvComment, tvWord;
@@ -462,7 +425,7 @@ public class HPDSelectableTextView extends TextView {
 
         private OperateWindow() {
             // 解析弹出的菜单
-            final View contentView = LayoutInflater.from(getContext()).inflate(R.layout.option_view, null);
+            @SuppressLint("InflateParams") final View contentView = LayoutInflater.from(getContext()).inflate(R.layout.option_view, null, false);
 
             //划线
             tvDrawLine = contentView.findViewById(R.id.draw_line);
@@ -539,10 +502,9 @@ public class HPDSelectableTextView extends TextView {
                     for (SelectionInfo info : comments) {
                         if (!(mSelectionInfo.getEnd() < info.getStart() || mSelectionInfo.getStart() > info.getEnd())) {
                             objects.add(info);
-                            stringBuilder.append(info.getComment() + " sss ");
+                            stringBuilder.append(info.getComment()).append(" sss ");
                         }
                     }
-                    Log.i("fadfadsfa", "stringBuilder: " + stringBuilder.toString());
 
                     //暂时使用
                     AlertDialog.Builder builder = new AlertDialog.Builder(getContext());
@@ -595,7 +557,6 @@ public class HPDSelectableTextView extends TextView {
                             invalidate();
                         }
                     });
-
 
                     //设置反面按钮
                     builder.setNegativeButton("不是", new DialogInterface.OnClickListener() {
@@ -655,9 +616,11 @@ public class HPDSelectableTextView extends TextView {
 
             // 获取在当前窗口内的绝对坐标
             mTextView.getLocationInWindow(mLocation);
+            int[] scrollViewLocation = new int[2];
+            mTextView.getLocationOnScreen(scrollViewLocation);
 
-            float resultX = 0;
-            float resultY = 0;
+            float resultX;
+            float resultY;
 
             // 得到当前字符段的左边X坐标+Y坐标
             float startX = mSelectionInfo.getStartX() + mLocation[0] + getPaddingLeft();
@@ -687,19 +650,26 @@ public class HPDSelectableTextView extends TextView {
             }
 
             //取得开始位置的y
-            resultY = mSelectionInfo.getStartLineBound().top + getPaddingTop() + mLocation[1] - mHeight - 5;
-            if (resultY <= 300) {
+            int startY = mSelectionInfo.getStartLineBound().top + getPaddingTop() + mLocation[1] - mHeight;
+            mScrollView.getLocationInWindow(scrollViewLocation);
+            if (startY <= scrollViewLocation[1] + mScrollView.getPaddingTop()) {
                 //需要显示在所选区域下边
-                resultY = mSelectionInfo.getEndLineBound().bottom + getPaddingTop() + mLocation[1];
+                int endY = mSelectionInfo.getEndLineBound().bottom + getPaddingTop() + mLocation[1];
                 //如果下边的显示区域超过临界值，那就不要显示了。
-                if (resultY < 350) {
+                if (endY < scrollViewLocation[1] + mScrollView.getPaddingTop()) {
+                    return;
+                } else if (endY > scrollViewLocation[1] - mScrollView.getPaddingTop() + mScrollView.getHeight() - mHeight) {
+                    //最后的就是选择区域充满全屏幕，就显示在中间
+                    resultX = scrollViewLocation[0] + mScrollView.getWidth() / 2 - mWidth / 2;
+                    resultY = scrollViewLocation[1] + mScrollView.getHeight() / 2 - mHeight / 2;
+                } else {
+                    resultY = endY;
+                }
+            } else {
+                if (startY > scrollViewLocation[1] - mScrollView.getPaddingTop() + mScrollView.getHeight() - mHeight) {
                     return;
                 }
-                //最后的就是选择区域充满全屏幕，就显示在中间
-                if (resultY > getContext().getResources().getDisplayMetrics().heightPixels - mHeight) {
-                    resultX = getContext().getResources().getDisplayMetrics().widthPixels / 2 - mWidth / 2;
-                    resultY = getContext().getResources().getDisplayMetrics().heightPixels / 2 - mHeight / 2;
-                }
+                resultY = startY;
             }
             mWindow.showAtLocation(mTextView, Gravity.NO_GRAVITY, (int) resultX, (int) resultY);
         }
@@ -710,15 +680,6 @@ public class HPDSelectableTextView extends TextView {
 
         public boolean isShowing() {
             return mWindow.isShowing();
-        }
-
-        /**
-         * 设置弹窗菜单是否能够使用删除按钮
-         *
-         * @param del:是否显示删除按钮的Boolean值变量
-         */
-        private void setDel(boolean del) {
-            tvDrawLine.setEnabled(del);
         }
     }
 }
