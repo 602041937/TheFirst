@@ -4,12 +4,6 @@ import android.content.Context;
 import android.text.Layout;
 import android.widget.TextView;
 
-/**
- * Created by Jaeger on 16/8/31.
- *
- * Email: chjie.jaeger@gmail.com
- * GitHub: https://github.com/laobie
- */
 public class TextLayoutUtil {
 
     public static int getScreenWidth(Context context) {

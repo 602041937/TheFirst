@@ -4,12 +4,6 @@ import android.graphics.Color;
 import android.graphics.Rect;
 import android.text.style.BackgroundColorSpan;
 
-/**
- * Created by Jaeger on 16/8/30.
- * <p>
- * Email: chjie.jaeger@gmail.com
- * GitHub: https://github.com/laobie
- */
 public class SelectionInfo {
 
     private int start;

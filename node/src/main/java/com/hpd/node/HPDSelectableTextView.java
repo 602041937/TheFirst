@@ -11,7 +11,6 @@ import android.graphics.Color;
 import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Rect;
-import android.graphics.drawable.BitmapDrawable;
 import android.support.annotation.Nullable;
 import android.support.v7.app.AlertDialog;
 import android.text.Spannable;
@@ -49,31 +48,52 @@ public class HPDSelectableTextView extends TextView {
     private static final int CURSOR_LINE_WIDTH = 3;
     //游标的圆形直径
     private static final int CURSOR_CIRCLE_DIAMETER = 10;
-
+    //划线，批注，单词
     public int OPERATE_WINDOW_DRAW_LINE = 0, OPERATE_WINDOW_COMMENT = 1, OPERATE_WINDOW_WORD = 2;
-    private SelectionInfo mSelectionInfo = null;
+    //当前选择状态
+    private SelectionInfo mCurrentSelectionInfo = null;
     private int mTouchX;
     private int mTouchY;
     private TextView mTextView;
     private int[] mLocation = new int[2];
-    private Spannable mSpannable;
+    private Spannable mCurrentSpannable;
     private BackgroundColorSpan mBackgroundColorSpan;
     private Paint paint;
+    //划线的数据
     private ArrayList<SelectionInfo> lines = new ArrayList<>();
-
+    //批注的数据
     private ArrayList<SelectionInfo> comments = new ArrayList<>();
-
     private OperateWindow mOperateWindow;
     private MagnifyPop mMagnifyPop;
     private ObservableScrollView mScrollView;
     private View decorView;
+    //是否启动放大镜功能
+    private boolean isCanMagnify = true;
+    //放大镜中的图像
+    private Bitmap magnifyBitmap;
+    //放大镜的宽高
+    private int magnifyViewWidth = 450;
+    private int magnifyViewHeight = 200;
+    //文本选择滑动判断是否是开始的游标
+    boolean isStartCursor;
+    //游标是否开始滑动
+    boolean isCursorMoveBegin;
+    //批注点击的有效范围
+    private int COMMENT_CLICK_ADD_OFFSET = 10;
+    //游标点击的有效范围
+    private int CURSOR_CLICK_ADD_OFFSET = 150;
 
     public ScrollView getScrollView() {
         return mScrollView;
     }
 
-    private boolean isCanMagnify = true;
+    public boolean isCanMagnify() {
+        return isCanMagnify;
+    }
 
+    public void setCanMagnify(boolean canMagnify) {
+        isCanMagnify = canMagnify;
+    }
 
     public void setScrollView(ObservableScrollView mScrollView) {
 
@@ -104,7 +124,6 @@ public class HPDSelectableTextView extends TextView {
         });
     }
 
-
     public HPDSelectableTextView(Context context) {
         this(context, null);
     }
@@ -118,17 +137,13 @@ public class HPDSelectableTextView extends TextView {
         init();
     }
 
-    boolean isStartCursor;
-    boolean isBegin;
-    private int COMMENT_CLICK_ADD_OFFSET = 10;
-
     private void init() {
 
         mTextView = this;
         Activity activity = (Activity) getContext();
         decorView = activity.getWindow().getDecorView();
         mTextView.setText(mTextView.getText(), TextView.BufferType.SPANNABLE);
-        mSpannable = (Spannable) getText();
+        mCurrentSpannable = (Spannable) getText();
         mBackgroundColorSpan = new BackgroundColorSpan(Color.RED);
 
         paint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -153,30 +168,30 @@ public class HPDSelectableTextView extends TextView {
                         Log.i("onTouch", "HPDSelectableTextView: ACTION_DOWN");
                         //判断是否点击在游标的区域
                         getParent().requestDisallowInterceptTouchEvent(false);
-                        if (mSelectionInfo != null) {
-                            boolean isStart = Math.abs(mSelectionInfo.getStartX() - mTouchX) < 100
-                                    && ((Math.abs(mSelectionInfo.getStartLineBound().top - mTouchY) < 100
-                                    || (Math.abs(mSelectionInfo.getStartLineBound().bottom - mTouchY) < 100)));
+                        if (mCurrentSelectionInfo != null) {
+                            boolean isStart = Math.abs(mCurrentSelectionInfo.getStartX() - mTouchX) < CURSOR_CLICK_ADD_OFFSET
+                                    && ((Math.abs(mCurrentSelectionInfo.getStartLineBound().top - mTouchY) < CURSOR_CLICK_ADD_OFFSET
+                                    || (Math.abs(mCurrentSelectionInfo.getStartLineBound().bottom - mTouchY) < CURSOR_CLICK_ADD_OFFSET)));
 
-                            boolean isEnd = Math.abs(mSelectionInfo.getEndX() - mTouchX) < 100
-                                    && ((Math.abs(mSelectionInfo.getEndLineBound().top - mTouchY) < 100
-                                    || (Math.abs(mSelectionInfo.getEndLineBound().bottom - mTouchY) < 100)));
+                            boolean isEnd = Math.abs(mCurrentSelectionInfo.getEndX() - mTouchX) < CURSOR_CLICK_ADD_OFFSET
+                                    && ((Math.abs(mCurrentSelectionInfo.getEndLineBound().top - mTouchY) < CURSOR_CLICK_ADD_OFFSET
+                                    || (Math.abs(mCurrentSelectionInfo.getEndLineBound().bottom - mTouchY) < CURSOR_CLICK_ADD_OFFSET)));
 
                             if (isStart && isEnd) {
-                                if (Math.abs(mSelectionInfo.getStartX() - mTouchX) > Math.abs(mSelectionInfo.getEndX() - mTouchX)) {
+                                if (Math.abs(mCurrentSelectionInfo.getStartX() - mTouchX) > Math.abs(mCurrentSelectionInfo.getEndX() - mTouchX)) {
                                     isStartCursor = false;
-                                    isBegin = true;
+                                    isCursorMoveBegin = true;
                                 } else {
                                     isStartCursor = true;
-                                    isBegin = true;
+                                    isCursorMoveBegin = true;
                                 }
                                 return true;
                             } else if (isStart) {
                                 isStartCursor = true;
-                                isBegin = true;
+                                isCursorMoveBegin = true;
                                 return true;
                             } else if (isEnd) {
-                                isBegin = true;
+                                isCursorMoveBegin = true;
                                 isStartCursor = false;
                                 return true;
                             }
@@ -188,7 +203,7 @@ public class HPDSelectableTextView extends TextView {
                         Log.i("onTouch", "HPDSelectableTextView: ACTION_MOVE");
                         getParent().requestDisallowInterceptTouchEvent(false);
                         //判断是否点击在游标的区域
-                        if (mSelectionInfo != null && isBegin) {
+                        if (mCurrentSelectionInfo != null && isCursorMoveBegin) {
                             getParent().requestDisallowInterceptTouchEvent(true);
                             dealMoveStarCursor(isStartCursor);
                             dealMoveMagnifyPop(isStartCursor);
@@ -202,7 +217,7 @@ public class HPDSelectableTextView extends TextView {
                     case MotionEvent.ACTION_UP:
                         getParent().requestDisallowInterceptTouchEvent(true);
                         Log.i("onTouch", "HPDSelectableTextView: ACTION_UP");
-                        isBegin = false;
+                        isCursorMoveBegin = false;
                         if (mOperateWindow != null) {
                             mOperateWindow.show(OPERATE_WINDOW_DRAW_LINE, OPERATE_WINDOW_COMMENT);
                         }
@@ -228,8 +243,8 @@ public class HPDSelectableTextView extends TextView {
             @Override
             public void onClick(View v) {
                 //当用户点击text，取消选中
-                if (mSelectionInfo != null) {
-                    mSelectionInfo = null;
+                if (mCurrentSelectionInfo != null) {
+                    mCurrentSelectionInfo = null;
                     clearSelectState();
                     mOperateWindow.dismiss();
                 } else {
@@ -259,14 +274,12 @@ public class HPDSelectableTextView extends TextView {
 
     private void clearSelectState() {
 
-        mSelectionInfo = null;
+        mCurrentSelectionInfo = null;
         if (mBackgroundColorSpan != null) {
-            mSpannable.removeSpan(mBackgroundColorSpan);
+            mCurrentSpannable.removeSpan(mBackgroundColorSpan);
         }
         invalidate();
     }
-
-    Bitmap bitmap;
 
     private void dealMoveStarCursor(boolean isLeft) {
 
@@ -277,45 +290,46 @@ public class HPDSelectableTextView extends TextView {
         }
 
         if (isLeft) {
-            mSelectionInfo.setStart(position);
-            mSelectionInfo.setStartLine(getLayout().getLineForOffset(position));
-            float starX = getLayout().getPrimaryHorizontal(mSelectionInfo.getStart());
-            mSelectionInfo.setStartX(starX);
+            mCurrentSelectionInfo.setStart(position);
+            mCurrentSelectionInfo.setStartLine(getLayout().getLineForOffset(position));
+            float starX = getLayout().getPrimaryHorizontal(mCurrentSelectionInfo.getStart());
+            mCurrentSelectionInfo.setStartX(starX);
 
             Rect startLineBound = new Rect();
-            getLayout().getLineBounds(mSelectionInfo.getStartLine(), startLineBound);
-            mSelectionInfo.setStartLineBound(startLineBound);
+            getLayout().getLineBounds(mCurrentSelectionInfo.getStartLine(), startLineBound);
+            mCurrentSelectionInfo.setStartLineBound(startLineBound);
 
         } else {
-            mSelectionInfo.setEnd(position);
-            mSelectionInfo.setEndLine(getLayout().getLineForOffset(position));
-            float endX = getLayout().getPrimaryHorizontal(mSelectionInfo.getEnd());
-            mSelectionInfo.setEndX(endX);
+            mCurrentSelectionInfo.setEnd(position);
+            mCurrentSelectionInfo.setEndLine(getLayout().getLineForOffset(position));
+            float endX = getLayout().getPrimaryHorizontal(mCurrentSelectionInfo.getEnd());
+            mCurrentSelectionInfo.setEndX(endX);
 
             Rect endLineBound = new Rect();
-            getLayout().getLineBounds(mSelectionInfo.getEndLine(), endLineBound);
-            mSelectionInfo.setEndLineBound(endLineBound);
+            getLayout().getLineBounds(mCurrentSelectionInfo.getEndLine(), endLineBound);
+            mCurrentSelectionInfo.setEndLineBound(endLineBound);
         }
 
-        if (mSelectionInfo.getStart() > mSelectionInfo.getEnd()) {
-            mSelectionInfo.reverse();
+        if (mCurrentSelectionInfo.getStart() > mCurrentSelectionInfo.getEnd()) {
+            mCurrentSelectionInfo.reverse();
             isStartCursor = !isStartCursor;
         }
 
-        mSelectionInfo.setSelectionContent(
-                mSpannable.subSequence(
-                        mSelectionInfo.getStart(),
-                        mSelectionInfo.getEnd()).toString());
+        mCurrentSelectionInfo.setSelectionContent(
+                mCurrentSpannable.subSequence(
+                        mCurrentSelectionInfo.getStart(),
+                        mCurrentSelectionInfo.getEnd()).toString());
 
         if (mBackgroundColorSpan != null) {
-            mSpannable.removeSpan(mBackgroundColorSpan);
+            mCurrentSpannable.removeSpan(mBackgroundColorSpan);
         }
 
-        mSpannable.setSpan(mBackgroundColorSpan,
-                mSelectionInfo.getStart(), mSelectionInfo.getEnd(),
+        mCurrentSpannable.setSpan(mBackgroundColorSpan,
+                mCurrentSelectionInfo.getStart(), mCurrentSelectionInfo.getEnd(),
                 Spanned.SPAN_EXCLUSIVE_INCLUSIVE);
         invalidate();
     }
+
 
     private void dealMoveMagnifyPop(boolean isLeft) {
 
@@ -328,40 +342,40 @@ public class HPDSelectableTextView extends TextView {
 
         if (isLeft) {
 
-            int imageX = (int) (mSelectionInfo.getStartX() - 150 + mLocation[0] + getPaddingLeft());
+            int imageX = (int) (mCurrentSelectionInfo.getStartX() - magnifyViewWidth / 2 + mLocation[0] + getPaddingLeft());
             if (imageX < 0) {
                 imageX = 0;
             }
-            if (imageX > bmp.getWidth() - 300) {
-                imageX = bmp.getWidth() - 300;
+            if (imageX > bmp.getWidth() - magnifyViewWidth) {
+                imageX = bmp.getWidth() - magnifyViewWidth;
             }
-            int imageY = (int) (mSelectionInfo.getStartLineBound().top + mLocation[1] + getPaddingTop() + getTextSize() / 2 - 75);
+            int imageY = (int) (mCurrentSelectionInfo.getStartLineBound().top + mLocation[1] + getPaddingTop() + getTextSize() / 2 - magnifyViewHeight / 2);
             if (imageY < 0) {
                 imageY = 0;
             }
-            if (imageY > bmp.getHeight() - 150) {
-                imageY = bmp.getHeight() - 150;
+            if (imageY > bmp.getHeight() - magnifyViewHeight) {
+                imageY = bmp.getHeight() - magnifyViewHeight;
             }
-            bitmap = Bitmap.createBitmap(bmp, imageX, imageY, 300, 150);
+            magnifyBitmap = Bitmap.createBitmap(bmp, imageX, imageY, magnifyViewWidth, magnifyViewHeight);
             mMagnifyPop.show();
 
         } else {
 
-            int imageX = (int) (mSelectionInfo.getEndX() + getPaddingLeft() - 150 + mLocation[0]);
+            int imageX = (int) (mCurrentSelectionInfo.getEndX() + getPaddingLeft() - magnifyViewWidth / 2 + mLocation[0]);
             if (imageX < 0) {
                 imageX = 0;
             }
-            if (imageX > bmp.getWidth() - 300) {
-                imageX = bmp.getWidth() - 300;
+            if (imageX > bmp.getWidth() - magnifyViewWidth) {
+                imageX = bmp.getWidth() - magnifyViewWidth;
             }
-            int imageY = (int) (mSelectionInfo.getEndLineBound().top + mLocation[1] + getPaddingTop() + getTextSize() / 2 - 75);
+            int imageY = (int) (mCurrentSelectionInfo.getEndLineBound().top + mLocation[1] + getPaddingTop() + getTextSize() / 2 - magnifyViewHeight / 2);
             if (imageY < 0) {
                 imageY = 0;
             }
-            if (imageY > bmp.getHeight() - 150) {
-                imageY = bmp.getHeight() - 150;
+            if (imageY > bmp.getHeight() - magnifyViewHeight) {
+                imageY = bmp.getHeight() - magnifyViewHeight;
             }
-            bitmap = Bitmap.createBitmap(bmp, imageX, imageY, 300, 150);
+            magnifyBitmap = Bitmap.createBitmap(bmp, imageX, imageY, magnifyViewWidth, magnifyViewHeight);
             mMagnifyPop.show();
         }
     }
@@ -375,40 +389,40 @@ public class HPDSelectableTextView extends TextView {
             return;
         }
 
-        mSelectionInfo = new SelectionInfo();
+        mCurrentSelectionInfo = new SelectionInfo();
 
-        mSelectionInfo.setStart(startPosition);
+        mCurrentSelectionInfo.setStart(startPosition);
         int endPosition = startPosition + DEFAULT_SELECT_LENGTH;
-        mSelectionInfo.setEnd(endPosition);
+        mCurrentSelectionInfo.setEnd(endPosition);
 
-        mSelectionInfo.setStartLine(getLayout().getLineForOffset(startPosition));
-        mSelectionInfo.setEndLine(getLayout().getLineForOffset(endPosition));
+        mCurrentSelectionInfo.setStartLine(getLayout().getLineForOffset(startPosition));
+        mCurrentSelectionInfo.setEndLine(getLayout().getLineForOffset(endPosition));
 
-        float starX = getLayout().getPrimaryHorizontal(mSelectionInfo.getStart());
-        mSelectionInfo.setStartX(starX);
+        float starX = getLayout().getPrimaryHorizontal(mCurrentSelectionInfo.getStart());
+        mCurrentSelectionInfo.setStartX(starX);
 
-        float endX = getLayout().getPrimaryHorizontal(mSelectionInfo.getEnd());
-        mSelectionInfo.setEndX(endX);
+        float endX = getLayout().getPrimaryHorizontal(mCurrentSelectionInfo.getEnd());
+        mCurrentSelectionInfo.setEndX(endX);
 
         Rect startLineBound = new Rect();
-        getLayout().getLineBounds(mSelectionInfo.getStartLine(), startLineBound);
-        mSelectionInfo.setStartLineBound(startLineBound);
+        getLayout().getLineBounds(mCurrentSelectionInfo.getStartLine(), startLineBound);
+        mCurrentSelectionInfo.setStartLineBound(startLineBound);
 
         Rect endLineBound = new Rect();
-        getLayout().getLineBounds(mSelectionInfo.getEndLine(), endLineBound);
-        mSelectionInfo.setEndLineBound(endLineBound);
+        getLayout().getLineBounds(mCurrentSelectionInfo.getEndLine(), endLineBound);
+        mCurrentSelectionInfo.setEndLineBound(endLineBound);
 
-        mSelectionInfo.setSelectionContent(
-                mSpannable.subSequence(
-                        mSelectionInfo.getStart(),
-                        mSelectionInfo.getEnd()).toString());
+        mCurrentSelectionInfo.setSelectionContent(
+                mCurrentSpannable.subSequence(
+                        mCurrentSelectionInfo.getStart(),
+                        mCurrentSelectionInfo.getEnd()).toString());
 
         if (mBackgroundColorSpan != null) {
-            mSpannable.removeSpan(mBackgroundColorSpan);
+            mCurrentSpannable.removeSpan(mBackgroundColorSpan);
         }
 
-        mSpannable.setSpan(mBackgroundColorSpan,
-                mSelectionInfo.getStart(), mSelectionInfo.getEnd(),
+        mCurrentSpannable.setSpan(mBackgroundColorSpan,
+                mCurrentSelectionInfo.getStart(), mCurrentSelectionInfo.getEnd(),
                 Spanned.SPAN_EXCLUSIVE_INCLUSIVE);
 
         mOperateWindow.show(OPERATE_WINDOW_DRAW_LINE, OPERATE_WINDOW_COMMENT);
@@ -419,16 +433,16 @@ public class HPDSelectableTextView extends TextView {
     public void draw(Canvas canvas) {
         super.draw(canvas);
 
-        if (mSelectionInfo != null) {
+        if (mCurrentSelectionInfo != null) {
 
             paint.setColor(Color.GREEN);
-            float startX = mSelectionInfo.getStartX() + getPaddingLeft();
-            Rect startLineBound = mSelectionInfo.getStartLineBound();
+            float startX = mCurrentSelectionInfo.getStartX() + getPaddingLeft();
+            Rect startLineBound = mCurrentSelectionInfo.getStartLineBound();
             canvas.drawRect(startX - CURSOR_LINE_WIDTH, startLineBound.top + getPaddingTop(), startX, startLineBound.bottom + getPaddingTop(), paint);
             canvas.drawCircle(startX - CURSOR_LINE_WIDTH / 2, startLineBound.top - CURSOR_CIRCLE_DIAMETER + getPaddingTop(), CURSOR_CIRCLE_DIAMETER, paint);
 
-            float endX = mSelectionInfo.getEndX() + getPaddingLeft();
-            Rect endLineBound = mSelectionInfo.getEndLineBound();
+            float endX = mCurrentSelectionInfo.getEndX() + getPaddingLeft();
+            Rect endLineBound = mCurrentSelectionInfo.getEndLineBound();
 
             canvas.drawRect(endX - CURSOR_LINE_WIDTH, endLineBound.top + getPaddingTop(), endX, endLineBound.bottom + getPaddingTop(), paint);
             canvas.drawCircle(endX - CURSOR_LINE_WIDTH / 2, endLineBound.bottom + CURSOR_CIRCLE_DIAMETER + getPaddingTop(), CURSOR_CIRCLE_DIAMETER, paint);
@@ -460,21 +474,21 @@ public class HPDSelectableTextView extends TextView {
 
         //画标注
         for (SelectionInfo comment : comments) {
-            mSpannable.setSpan(comment.getCommentSpan(), comment.getStart(), comment.getEnd(), Spanned.SPAN_EXCLUSIVE_INCLUSIVE);
+            mCurrentSpannable.setSpan(comment.getCommentSpan(), comment.getStart(), comment.getEnd(), Spanned.SPAN_EXCLUSIVE_INCLUSIVE);
             canvas.drawBitmap(getCommentBitmap(), comment.getEndX() + getPaddingLeft(), comment.getEndLineBound().bottom - 10 + getPaddingTop(), null);
         }
     }
 
-    private Bitmap dstbmp;
+    private Bitmap commentBitmap;
 
     private Bitmap getCommentBitmap() {
-        if (dstbmp == null) {
+        if (commentBitmap == null) {
             Bitmap bmp = BitmapFactory.decodeResource(getResources(), R.drawable.ic_comment);
             Matrix matrix = new Matrix();
             matrix.postScale(0.35f, 0.35f);
-            dstbmp = Bitmap.createBitmap(bmp, 0, 0, bmp.getWidth(), bmp.getHeight(), matrix, true);
+            commentBitmap = Bitmap.createBitmap(bmp, 0, 0, bmp.getWidth(), bmp.getHeight(), matrix, true);
         }
-        return dstbmp;
+        return commentBitmap;
     }
 
     /*
@@ -498,15 +512,15 @@ public class HPDSelectableTextView extends TextView {
                 @Override
                 public void onClick(View v) {
 
-                    if (mSelectionInfo == null) {
+                    if (mCurrentSelectionInfo == null) {
                         return;
                     }
-                    if (TextUtils.isEmpty(mSelectionInfo.getSelectionContent())) {
+                    if (TextUtils.isEmpty(mCurrentSelectionInfo.getSelectionContent())) {
                         return;
                     }
 
                     boolean isCanTogether = true;
-                    lines.add(mSelectionInfo);
+                    lines.add(mCurrentSelectionInfo);
 
                     B:
                     while (isCanTogether) {
@@ -542,7 +556,7 @@ public class HPDSelectableTextView extends TextView {
                         }
                         isCanTogether = false;
                     }
-                    mSelectionInfo = null;
+                    mCurrentSelectionInfo = null;
                     clearSelectState();
                     dismiss();
                     invalidate();
@@ -555,17 +569,17 @@ public class HPDSelectableTextView extends TextView {
                 @Override
                 public void onClick(View v) {
 
-                    if (mSelectionInfo == null) {
+                    if (mCurrentSelectionInfo == null) {
                         return;
                     }
-                    if (TextUtils.isEmpty(mSelectionInfo.getSelectionContent())) {
+                    if (TextUtils.isEmpty(mCurrentSelectionInfo.getSelectionContent())) {
                         return;
                     }
 
                     final ArrayList<SelectionInfo> objects = new ArrayList<>();
                     final StringBuilder stringBuilder = new StringBuilder();
                     for (SelectionInfo info : comments) {
-                        if (!(mSelectionInfo.getEnd() < info.getStart() || mSelectionInfo.getStart() > info.getEnd())) {
+                        if (!(mCurrentSelectionInfo.getEnd() < info.getStart() || mCurrentSelectionInfo.getStart() > info.getEnd())) {
                             objects.add(info);
                             stringBuilder.append(info.getComment()).append(" sss ");
                         }
@@ -584,9 +598,9 @@ public class HPDSelectableTextView extends TextView {
 
                             //处理合并comment
                             //逻辑
-                            objects.add(mSelectionInfo);
-                            SelectionInfo mixStartInfo = mSelectionInfo;
-                            SelectionInfo maxEndInfo = mSelectionInfo;
+                            objects.add(mCurrentSelectionInfo);
+                            SelectionInfo mixStartInfo = mCurrentSelectionInfo;
+                            SelectionInfo maxEndInfo = mCurrentSelectionInfo;
                             for (SelectionInfo info : objects) {
                                 if (info.getStart() < mixStartInfo.getStart()) {
                                     mixStartInfo = info;
@@ -596,20 +610,20 @@ public class HPDSelectableTextView extends TextView {
                                 }
                             }
 
-                            mSelectionInfo.setStart(mixStartInfo.getStart());
-                            mSelectionInfo.setStartX(mixStartInfo.getStartX());
-                            mSelectionInfo.setStartLine(mixStartInfo.getStartLine());
-                            mSelectionInfo.setStartLineBound(mixStartInfo.getStartLineBound());
-                            mSelectionInfo.setEnd(maxEndInfo.getEnd());
-                            mSelectionInfo.setEndX(maxEndInfo.getEndX());
-                            mSelectionInfo.setEndLine(maxEndInfo.getEndLine());
-                            mSelectionInfo.setEndLineBound(maxEndInfo.getEndLineBound());
+                            mCurrentSelectionInfo.setStart(mixStartInfo.getStart());
+                            mCurrentSelectionInfo.setStartX(mixStartInfo.getStartX());
+                            mCurrentSelectionInfo.setStartLine(mixStartInfo.getStartLine());
+                            mCurrentSelectionInfo.setStartLineBound(mixStartInfo.getStartLineBound());
+                            mCurrentSelectionInfo.setEnd(maxEndInfo.getEnd());
+                            mCurrentSelectionInfo.setEndX(maxEndInfo.getEndX());
+                            mCurrentSelectionInfo.setEndLine(maxEndInfo.getEndLine());
+                            mCurrentSelectionInfo.setEndLineBound(maxEndInfo.getEndLineBound());
 
-                            mSelectionInfo.setComment(stringBuilder.toString() + mSelectionInfo.getStart());
+                            mCurrentSelectionInfo.setComment(stringBuilder.toString() + mCurrentSelectionInfo.getStart());
 
                             comments.removeAll(objects);
 
-                            comments.add(mSelectionInfo);
+                            comments.add(mCurrentSelectionInfo);
                             Collections.sort(comments, new Comparator<SelectionInfo>() {
                                 @Override
                                 public int compare(SelectionInfo o1, SelectionInfo o2) {
@@ -652,10 +666,10 @@ public class HPDSelectableTextView extends TextView {
          */
         private void show(int... operates) {
 
-            if (mSelectionInfo == null) {
+            if (mCurrentSelectionInfo == null) {
                 return;
             }
-            if (TextUtils.isEmpty(mSelectionInfo.getSelectionContent())) {
+            if (TextUtils.isEmpty(mCurrentSelectionInfo.getSelectionContent())) {
                 return;
             }
 
@@ -688,8 +702,8 @@ public class HPDSelectableTextView extends TextView {
             float resultY;
 
             // 得到当前字符段的左边X坐标+Y坐标
-            float startX = mSelectionInfo.getStartX() + mLocation[0] + getPaddingLeft();
-            float endX = mSelectionInfo.getEndX() + mLocation[0] + getPaddingLeft();
+            float startX = mCurrentSelectionInfo.getStartX() + mLocation[0] + getPaddingLeft();
+            float endX = mCurrentSelectionInfo.getEndX() + mLocation[0] + getPaddingLeft();
 
             resultX = startX + (endX - startX) / 2 - mWidth / 2;
 
@@ -715,11 +729,11 @@ public class HPDSelectableTextView extends TextView {
             }
 
             //取得开始位置的y
-            int startY = mSelectionInfo.getStartLineBound().top + getPaddingTop() + mLocation[1] - mHeight;
+            int startY = mCurrentSelectionInfo.getStartLineBound().top + getPaddingTop() + mLocation[1] - mHeight;
             mScrollView.getLocationInWindow(scrollViewLocation);
             if (startY <= scrollViewLocation[1] + mScrollView.getPaddingTop()) {
                 //需要显示在所选区域下边
-                int endY = mSelectionInfo.getEndLineBound().bottom + getPaddingTop() + mLocation[1];
+                int endY = mCurrentSelectionInfo.getEndLineBound().bottom + getPaddingTop() + mLocation[1];
                 //如果下边的显示区域超过临界值，那就不要显示了。
                 if (endY < scrollViewLocation[1] + mScrollView.getPaddingTop()) {
                     return;
@@ -757,28 +771,31 @@ public class HPDSelectableTextView extends TextView {
         private PopupWindow mWindow;
         private ImageView imageView;
 
-        public MagnifyPop() {
+        MagnifyPop() {
 
             @SuppressLint("InflateParams") final View contentView = LayoutInflater.from(getContext()).inflate(R.layout.mgnify_view, null, false);
-            imageView = new ImageView(getContext());
             // 通过PopWindow弹出
             mWindow = new PopupWindow(contentView,
                     ViewGroup.LayoutParams.WRAP_CONTENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT, false);
             imageView = contentView.findViewById(R.id.image);
+            ViewGroup.LayoutParams layoutParams = imageView.getLayoutParams();
+            layoutParams.width = magnifyViewWidth;
+            layoutParams.height = magnifyViewHeight;
+            imageView.setLayoutParams(layoutParams);
         }
 
-        public void show() {
+        void show() {
             Log.i(" mWindow.getHeight()", "show:  mWindow.getHeight()" + mWindow.getHeight());
-            int x = mTouchX + mLocation[0] + getPaddingLeft() - 300 / 2;
-            int y = mTouchY + mLocation[1] + getPaddingTop() - 150 - 100;
+            int x = mTouchX + mLocation[0] + getPaddingLeft() - magnifyViewWidth / 2;
+            int y = mTouchY + mLocation[1] + getPaddingTop() - magnifyViewHeight - 100;
             Log.i("xxxx", "y=" + y);
             if (y < 150) {
                 y = 250;
             }
 
-            if (bitmap != null) {
-                imageView.setImageBitmap(bitmap);
+            if (magnifyBitmap != null) {
+                imageView.setImageBitmap(magnifyBitmap);
             }
             if (mWindow.isShowing()) {
                 mWindow.update(x, y, mWindow.getWidth(), mWindow.getHeight());
@@ -788,6 +805,7 @@ public class HPDSelectableTextView extends TextView {
         }
 
         public void dismiss() {
+
             if (mWindow.isShowing()) {
                 mWindow.dismiss();
             }
