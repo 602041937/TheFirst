@@ -1,13 +1,9 @@
 package com.hpd.node;
 
+import android.graphics.Color;
 import android.graphics.Rect;
+import android.text.style.BackgroundColorSpan;
 
-/**
- * Created by Jaeger on 16/8/30.
- * <p>
- * Email: chjie.jaeger@gmail.com
- * GitHub: https://github.com/laobie
- */
 public class SelectionInfo {
 
     private int start;
@@ -19,6 +15,24 @@ public class SelectionInfo {
     private float endX;
     private Rect endLineBound;
     private String selectionContent;
+    private String comment;
+    private BackgroundColorSpan commentSpan = new BackgroundColorSpan(Color.YELLOW);
+
+    public BackgroundColorSpan getCommentSpan() {
+        return commentSpan;
+    }
+
+    public void setCommentSpan(BackgroundColorSpan commentSpan) {
+        this.commentSpan = commentSpan;
+    }
+
+    public String getComment() {
+        return comment;
+    }
+
+    public void setComment(String comment) {
+        this.comment = comment;
+    }
 
     public void reverse() {
 

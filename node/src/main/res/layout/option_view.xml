@@ -19,6 +19,7 @@
             android:textColor="#fff" />
 
         <TextView
+            android:id="@+id/comment"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:padding="5dp"
@@ -26,6 +27,7 @@
             android:textColor="#fff" />
 
         <TextView
+            android:id="@+id/word"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:padding="5dp"
